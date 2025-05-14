@@ -1,52 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_time_picker_spinner/flutter_time_picker_spinner.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MyHomePage(title: 'Eddie\'s Milk Tracker'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
 
   final String title;
 
@@ -55,21 +39,11 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
-  List<String> _logs = [];
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  bool _isFeeding = true; // true = feeding, false = diaper
+  bool _isPoopy = false; // for diaper
+  double _amount = 2.0; // for feeding
 
   void _onTimeChanged(TimeOfDay? newTime) {
     if (newTime != null) {
@@ -99,7 +73,13 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _saveLog() {
+  Future<void> _saveLog() async {
+    if (!_isFeeding) {
+      // Diaper log
+      await _saveDiaperLog(isPoopy: _isPoopy);
+      return;
+    }
+    // Feeding log
     final logDateTime = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -107,172 +87,307 @@ class _MyHomePageState extends State<MyHomePage> {
       _selectedTime.hour,
       _selectedTime.minute,
     );
-    final log =
-        'Saved at ${DateTime.now().toLocal().toString().split('.')[0]} - Feed: ${logDateTime.toLocal().toString().split('.')[0]}';
-    setState(() {
-      _logs.insert(0, log);
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text(
-              'Feed time saved: ${logDateTime.toLocal().toString().split('.')[0]}')),
+    try {
+      await FirebaseFirestore.instance.collection('feed_logs').add({
+        'feed_time': logDateTime,
+        'amount': _amount,
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Feed time saved: \n${logDateTime.toLocal().toString().split('.')[0]}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save log: $e')),
+      );
+    }
+  }
+
+  Future<void> _saveDiaperLog({required bool isPoopy}) async {
+    final logDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      _selectedTime.hour,
+      _selectedTime.minute,
     );
+    try {
+      await FirebaseFirestore.instance.collection('diaper_logs').add({
+        'diaper_time': logDateTime,
+        'poopy': isPoopy,
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                'Diaper change saved: ${logDateTime.toLocal().toString().split('.')[0]}${isPoopy ? " (poopy)" : ""}')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save log: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.local_drink),
+            tooltip: 'View Feed Logs',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const FeedLogsScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.baby_changing_station),
+            tooltip: 'View Diaper Logs',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const DiaperLogsScreen()),
+              );
+            },
+          ),
+        ],
       ),
       body: Center(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              const Text(
-                'You have pushed the button this many times:',
-              ),
-              Text(
-                '$_counter',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 32),
-              Row(
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              // Remove extra bottom padding
+              padding: const EdgeInsets.only(bottom: 0),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Date: ',
-                    style: Theme.of(context).textTheme.titleMedium,
+                children: <Widget>[
+                  const SizedBox(height: 32),
+                  // Toggle for Feeding/Diaper
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Feeding'),
+                        selected: _isFeeding,
+                        onSelected: (selected) {
+                          setState(() {
+                            _isFeeding = true;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      ChoiceChip(
+                        label: const Text('Diaper'),
+                        selected: !_isFeeding,
+                        onSelected: (selected) {
+                          setState(() {
+                            _isFeeding = false;
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  Text(
-                    '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}',
-                    style: Theme.of(context).textTheme.bodyLarge,
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.day.toString().padLeft(2, '0')}',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: _pickDate,
+                        child: const Text('Change Date'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: _pickDate,
-                    child: const Text('Change Date'),
+                  const SizedBox(height: 16),
+                  TimePickerSpinner(
+                    is24HourMode: false,
+                    isForce2Digits: true,
+                    normalTextStyle: Theme.of(context).textTheme.bodyLarge!,
+                    highlightedTextStyle: Theme.of(context)
+                        .textTheme
+                        .headlineMedium!
+                        .copyWith(color: Theme.of(context).colorScheme.primary),
+                    spacing: 30,
+                    itemHeight: 50,
+                    time: DateTime(
+                        0, 0, 0, _selectedTime.hour, _selectedTime.minute),
+                    onTimeChange: (dateTime) {
+                      setState(() {
+                        _selectedTime = TimeOfDay(
+                            hour: dateTime.hour, minute: dateTime.minute);
+                      });
+                    },
+                    minutesInterval: 1,
                   ),
+                  const SizedBox(height: 16),
+                  if (!_isFeeding)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Switch(
+                          value: _isPoopy,
+                          onChanged: (val) {
+                            setState(() {
+                              _isPoopy = val;
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Poopy?'),
+                      ],
+                    ),
+                  if (_isFeeding)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 80,
+                          child: TextField(
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Amount (oz)',
+                              border: OutlineInputBorder(),
+                            ),
+                            onChanged: (val) {
+                              setState(() {
+                                _amount = double.tryParse(val) ?? 0.0;
+                              });
+                            },
+                            controller:
+                                TextEditingController(text: _amount.toString()),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 24),
                 ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Select Time:',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              TimePickerSpinner(
-                time: TimeOfDay(
-                    hour: _selectedTime.hour, minute: _selectedTime.minute),
-                onTimeChange: _onTimeChanged,
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _saveLog,
-                child: const Text('Save'),
-              ),
-              const SizedBox(height: 24),
-              if (_logs.isNotEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Logs:',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    ..._logs.map((log) => Text(log)).toList(),
-                  ],
-                ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      // Move the Save button outside the scroll view and stack, and use bottomNavigationBar
+      bottomNavigationBar: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+        child: ElevatedButton(
+          onPressed: _saveLog,
+          style: ElevatedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48),
+          ),
+          child: const Text('Save'),
+        ),
       ),
     );
   }
 }
 
-class TimePickerSpinner extends StatelessWidget {
-  final TimeOfDay time;
-  final ValueChanged<TimeOfDay?> onTimeChange;
+typedef DocumentSnapshot = QueryDocumentSnapshot<Map<String, dynamic>>;
 
-  const TimePickerSpinner(
-      {Key? key, required this.time, required this.onTimeChange})
-      : super(key: key);
+class FeedLogsScreen extends StatelessWidget {
+  const FeedLogsScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    int hour12 = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-    String period = time.period == DayPeriod.am ? 'AM' : 'PM';
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        DropdownButton<int>(
-          value: hour12,
-          items: List.generate(
-              12,
-              (index) => DropdownMenuItem(
-                    value: index + 1,
-                    child: Text((index + 1).toString().padLeft(2, '0')),
-                  )),
-          onChanged: (hour) {
-            if (hour != null) {
-              int hour24 = period == 'AM'
-                  ? (hour == 12 ? 0 : hour)
-                  : (hour == 12 ? 12 : hour + 12);
-              onTimeChange(TimeOfDay(hour: hour24, minute: time.minute));
-            }
-          },
-        ),
-        const Text(' : '),
-        DropdownButton<int>(
-          value: time.minute,
-          items: List.generate(
-              60,
-              (index) => DropdownMenuItem(
-                    value: index,
-                    child: Text(index.toString().padLeft(2, '0')),
-                  )),
-          onChanged: (minute) {
-            if (minute != null) {
-              onTimeChange(TimeOfDay(hour: time.hour, minute: minute));
-            }
-          },
-        ),
-        const SizedBox(width: 8),
-        DropdownButton<String>(
-          value: period,
-          items: ['AM', 'PM']
-              .map((p) => DropdownMenuItem(
-                    value: p,
-                    child: Text(p),
-                  ))
-              .toList(),
-          onChanged: (newPeriod) {
-            if (newPeriod != null) {
-              int hour12 = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
-              int hour24 = newPeriod == 'AM'
-                  ? (hour12 == 12 ? 0 : hour12)
-                  : (hour12 == 12 ? 12 : hour12 + 12);
-              onTimeChange(TimeOfDay(hour: hour24, minute: time.minute));
-            }
-          },
-        ),
-      ],
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Feed Logs'),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('feed_logs')
+            .orderBy('feed_time', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          final docs = snapshot.data?.docs ?? [];
+          if (docs.isEmpty) {
+            return const Center(child: Text('No logs found.'));
+          }
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final feedTime = (doc['feed_time'] as Timestamp).toDate();
+              final amount = doc['amount'];
+              return ListTile(
+                leading: const Icon(Icons.local_drink),
+                title: Text(
+                  TimeOfDay.fromDateTime(feedTime).format(context),
+                ),
+                subtitle: Text(
+                    '${feedTime.month.toString().padLeft(2, '0')}-${feedTime.day.toString().padLeft(2, '0')} \n$amount oz'),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+class DiaperLogsScreen extends StatelessWidget {
+  const DiaperLogsScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Diaper Logs'),
+      ),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('diaper_logs')
+            .orderBy('diaper_time', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: \n${snapshot.error}'));
+          }
+          final docs = snapshot.data?.docs ?? [];
+          if (docs.isEmpty) {
+            return const Center(child: Text('No diaper logs found.'));
+          }
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final doc = docs[index];
+              final diaperTime = (doc['diaper_time'] as Timestamp).toDate();
+              final poopy = doc['poopy'] == true;
+              return ListTile(
+                leading: Icon(poopy
+                    ? Icons.airline_seat_recline_normal_rounded
+                    : Icons.auto_fix_normal),
+                title: Text(
+                  TimeOfDay.fromDateTime(diaperTime).format(context),
+                ),
+                subtitle: Text(
+                  '${diaperTime.month.toString().padLeft(2, '0')}-${diaperTime.day.toString().padLeft(2, '0')}${poopy ? '\nPoopy' : '\nPee'}',
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }
