@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_time_picker_spinner/flutter_time_picker_spinner.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -18,12 +18,21 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Milk Tracker',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.deepPurple,
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+      ),
+      themeMode: ThemeMode.system,
       home: const MyHomePage(title: 'Eddie\'s Milk Tracker'),
     );
   }
@@ -44,6 +53,7 @@ class _MyHomePageState extends State<MyHomePage> {
   bool _isFeeding = true; // true = feeding, false = diaper
   bool _isPoopy = false; // for diaper
   double _amount = 2.0; // for feeding
+  final TextEditingController _amountController = TextEditingController();
 
   void _onTimeChanged(TimeOfDay? newTime) {
     if (newTime != null) {
@@ -195,40 +205,154 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  // Date row: make the date text look like a pill button
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        '${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.day.toString().padLeft(2, '0')}',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                      const SizedBox(width: 12),
-                      ElevatedButton(
-                        onPressed: _pickDate,
-                        child: const Text('Change Date'),
+                      InkWell(
+                        onTap: _pickDate,
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 1.2),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.calendar_today,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${[
+                                  "Mon",
+                                  "Tue",
+                                  "Wed",
+                                  "Thu",
+                                  "Fri",
+                                  "Sat",
+                                  "Sun"
+                                ][_selectedDate.weekday - 1]}, '
+                                '${_selectedDate.month.toString().padLeft(2, '0')}/${_selectedDate.day.toString().padLeft(2, '0')}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  TimePickerSpinner(
-                    is24HourMode: false,
-                    isForce2Digits: true,
-                    normalTextStyle: Theme.of(context).textTheme.bodyLarge!,
-                    highlightedTextStyle: Theme.of(context)
-                        .textTheme
-                        .headlineMedium!
-                        .copyWith(color: Theme.of(context).colorScheme.primary),
-                    spacing: 30,
-                    itemHeight: 50,
-                    time: DateTime(
-                        0, 0, 0, _selectedTime.hour, _selectedTime.minute),
-                    onTimeChange: (dateTime) {
-                      setState(() {
-                        _selectedTime = TimeOfDay(
-                            hour: dateTime.hour, minute: dateTime.minute);
-                      });
-                    },
-                    minutesInterval: 1,
+                  // Time row: make the time text look like a pill button, keep the Now button
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      InkWell(
+                        onTap: () async {
+                          await showCupertinoModalPopup(
+                            context: context,
+                            builder: (context) {
+                              return SafeArea(
+                                child: Container(
+                                  color: Colors.white,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      SizedBox(
+                                        height: 200,
+                                        child: CupertinoDatePicker(
+                                          mode: CupertinoDatePickerMode.time,
+                                          initialDateTime: DateTime(
+                                              0,
+                                              0,
+                                              0,
+                                              _selectedTime.hour,
+                                              _selectedTime.minute),
+                                          use24hFormat: false,
+                                          onDateTimeChanged:
+                                              (DateTime newDateTime) {
+                                            setState(() {
+                                              _selectedTime = TimeOfDay(
+                                                hour: newDateTime.hour,
+                                                minute: newDateTime.minute,
+                                              );
+                                            });
+                                          },
+                                        ),
+                                      ),
+                                      CupertinoButton(
+                                        child: const Text('Done'),
+                                        onPressed: () =>
+                                            Navigator.of(context).pop(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 1.2),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.access_time,
+                                  size: 18,
+                                  color: Theme.of(context).colorScheme.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                _selectedTime.format(context),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyLarge
+                                    ?.copyWith(
+                                      color:
+                                          Theme.of(context).colorScheme.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            final now = TimeOfDay.now();
+                            _selectedTime = now;
+                          });
+                        },
+                        child: const Text('Now'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
                   if (!_isFeeding)
@@ -252,21 +376,37 @@ class _MyHomePageState extends State<MyHomePage> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         SizedBox(
-                          width: 80,
+                          width: 120,
                           child: TextField(
                             keyboardType: const TextInputType.numberWithOptions(
                                 decimal: true),
-                            decoration: const InputDecoration(
+                            textAlign: TextAlign.right,
+                            decoration: InputDecoration(
                               labelText: 'Amount (oz)',
-                              border: OutlineInputBorder(),
+                              border: const OutlineInputBorder(),
+                              suffixIcon: _amountController.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      onPressed: () {
+                                        setState(() {
+                                          _amountController.clear();
+                                          _amount = 0.0;
+                                        });
+                                      },
+                                    )
+                                  : null,
                             ),
                             onChanged: (val) {
                               setState(() {
-                                _amount = double.tryParse(val) ?? 0.0;
+                                if (val.isEmpty) {
+                                  // Don't force 0, just let it be empty
+                                  _amount = 0.0;
+                                } else {
+                                  _amount = double.tryParse(val) ?? _amount;
+                                }
                               });
                             },
-                            controller:
-                                TextEditingController(text: _amount.toString()),
+                            controller: _amountController,
                           ),
                         ),
                       ],
@@ -282,7 +422,10 @@ class _MyHomePageState extends State<MyHomePage> {
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
         child: ElevatedButton(
-          onPressed: _saveLog,
+          onPressed: (_isFeeding &&
+                  (_amountController.text.isEmpty || (_amount == 0.0)))
+              ? null
+              : _saveLog,
           style: ElevatedButton.styleFrom(
             minimumSize: const Size.fromHeight(48),
           ),
@@ -314,7 +457,7 @@ class FeedLogsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(child: Text('Error: \n${snapshot.error}'));
           }
           final docs = snapshot.data?.docs ?? [];
           if (docs.isEmpty) {
@@ -331,8 +474,95 @@ class FeedLogsScreen extends StatelessWidget {
                 title: Text(
                   TimeOfDay.fromDateTime(feedTime).format(context),
                 ),
-                subtitle: Text(
-                    '${feedTime.month.toString().padLeft(2, '0')}-${feedTime.day.toString().padLeft(2, '0')} \n$amount oz'),
+                subtitle: Text('${[
+                  "Mon",
+                  "Tue",
+                  "Wed",
+                  "Thu",
+                  "Fri",
+                  "Sat",
+                  "Sun"
+                ][feedTime.weekday - 1]}, '
+                    '${feedTime.month.toString().padLeft(2, '0')}-${feedTime.day.toString().padLeft(2, '0')}\n$amount oz'),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue),
+                      onPressed: () async {
+                        final newAmount = await showDialog<double>(
+                          context: context,
+                          builder: (context) {
+                            final controller =
+                                TextEditingController(text: amount.toString());
+                            return AlertDialog(
+                              title: const Text('Edit Amount'),
+                              content: TextField(
+                                controller: controller,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                decoration: const InputDecoration(
+                                    labelText: 'Amount (oz)'),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () {
+                                    final val =
+                                        double.tryParse(controller.text);
+                                    Navigator.of(context).pop(val);
+                                  },
+                                  child: const Text('Save'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (newAmount != null) {
+                          await FirebaseFirestore.instance
+                              .collection('feed_logs')
+                              .doc(doc.id)
+                              .update({'amount': newAmount});
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Log'),
+                            content: const Text(
+                                'Are you sure you want to delete this log?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await FirebaseFirestore.instance
+                              .collection('feed_logs')
+                              .doc(doc.id)
+                              .delete();
+                        }
+                      },
+                    ),
+                  ],
+                ),
               );
             },
           );
@@ -361,7 +591,7 @@ class DiaperLogsScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
           if (snapshot.hasError) {
-            return Center(child: Text('Error: \n${snapshot.error}'));
+            return Center(child: Text('Error: \\n${snapshot.error}'));
           }
           final docs = snapshot.data?.docs ?? [];
           if (docs.isEmpty) {
@@ -382,6 +612,91 @@ class DiaperLogsScreen extends StatelessWidget {
                 ),
                 subtitle: Text(
                   '${diaperTime.month.toString().padLeft(2, '0')}-${diaperTime.day.toString().padLeft(2, '0')}${poopy ? '\nPoopy' : '\nPee'}',
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.edit, color: Colors.blue),
+                      onPressed: () async {
+                        bool tempPoopy = poopy;
+                        final result = await showDialog<bool>(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              title: const Text('Edit Diaper Log'),
+                              content: StatefulBuilder(
+                                builder: (context, setStateDialog) {
+                                  return Row(
+                                    children: [
+                                      Switch(
+                                        value: tempPoopy,
+                                        onChanged: (val) {
+                                          setStateDialog(() {
+                                            tempPoopy = val;
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text('Poopy?'),
+                                    ],
+                                  );
+                                },
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.of(context).pop(tempPoopy),
+                                  child: const Text('Save'),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                        if (result != null) {
+                          await FirebaseFirestore.instance
+                              .collection('diaper_logs')
+                              .doc(doc.id)
+                              .update({'poopy': result});
+                        }
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Delete Log'),
+                            content: const Text(
+                                'Are you sure you want to delete this log?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text('Delete'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await FirebaseFirestore.instance
+                              .collection('diaper_logs')
+                              .doc(doc.id)
+                              .delete();
+                        }
+                      },
+                    ),
+                  ],
                 ),
               );
             },
